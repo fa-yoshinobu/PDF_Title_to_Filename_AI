@@ -6,6 +6,7 @@
         Height="780"
         MinWidth="980"
         MinHeight="620"
+        Icon="Icons/app.ico"
         WindowStartupLocation="CenterScreen"
         Background="#F4F7FB"
         FontFamily="Yu Gothic UI"
@@ -37,6 +38,25 @@
                                FontSize="13" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border x:Name="CodexUsageBadge"
+                            Background="#273B60"
+                            CornerRadius="14"
+                            Padding="12,6"
+                            Margin="0,0,10,0">
+                        <Border.ToolTip>
+                            <ToolTip>
+                                <TextBlock x:Name="CodexUsageToolTipText"
+                                           Text="解析を開始するとCodexの利用量を表示します。"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="380" />
+                            </ToolTip>
+                        </Border.ToolTip>
+                        <TextBlock x:Name="CodexUsageText"
+                                   Text="利用枠 — / 今回 0 tokens"
+                                   Foreground="White"
+                                   FontSize="12"
+                                   FontWeight="SemiBold" />
+                    </Border>
                     <Border x:Name="CodexStatusBadge"
                             Background="#273B60"
                             CornerRadius="14"
@@ -51,6 +71,10 @@
                     <Button x:Name="LoginButton"
                             Content="ChatGPTにログイン"
                             Click="LoginButton_Click"
+                            Padding="13,7"
+                            Margin="0,0,8,0" />
+                    <Button Content="ライセンス"
+                            Click="LicenseButton_Click"
                             Padding="13,7" />
                 </StackPanel>
             </Grid>
@@ -95,7 +119,20 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel VerticalAlignment="Center">
+                <Border Background="#FFF4D6"
+                        BorderBrush="#E5A817"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10,7"
+                        Margin="0,0,0,7">
+                    <TextBlock x:Name="AiUploadWarningText"
+                               Foreground="#704A00"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Text="注意: AI解析時、PDF先頭2ページの画像とOCR結果がCodex経由でOpenAIへアップロードされます。機密情報・個人情報を含むPDFは、利用規則を確認してから処理してください。" />
+                </Border>
                 <Border Background="#E8F0FF" CornerRadius="6" Padding="10,6">
                     <TextBlock Foreground="#244A90" FontSize="12">
                         <Run Text="メタデータ・現在のファイル名はAI判定に使用しません。" />

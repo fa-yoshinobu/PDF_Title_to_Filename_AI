@@ -80,6 +80,15 @@ public partial class MainWindow : Window
         LoadFolder(dialog.FolderName);
     }
 
+    private void LicenseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new LicenseWindow
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+    }
+
     private void LoadFolder(string folder)
     {
         Items.Clear();
@@ -126,6 +135,7 @@ public partial class MainWindow : Window
 
         _analysisCancellation = new CancellationTokenSource();
         var cancellationToken = _analysisCancellation.Token;
+        ApplyCodexUsage(CodexUsageSnapshot.Empty);
         SetBusy(true, "Codex App Serverを起動しています…");
         OperationProgress.Maximum = targets.Length;
         OperationProgress.Value = 0;
@@ -135,6 +145,7 @@ public partial class MainWindow : Window
         try
         {
             await using var codex = new CodexAppServerClient();
+            codex.UsageUpdated += ApplyCodexUsage;
             await codex.StartAsync(cancellationToken);
 
             for (var index = 0; index < targets.Length; index++)
@@ -290,6 +301,102 @@ public partial class MainWindow : Window
     {
         var status = await _loginService.GetStatusAsync();
         ApplyCodexStatus(status);
+    }
+
+    private void ApplyCodexUsage(CodexUsageSnapshot usage)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => ApplyCodexUsage(usage));
+            return;
+        }
+
+        var limitText = usage.PrimaryLimit is null
+            ? "利用枠 —"
+            : $"利用枠 {usage.PrimaryLimit.UsedPercent:0.#}%使用";
+        CodexUsageText.Text = $"{limitText} / 今回 {usage.SessionTotalTokens:N0} tokens";
+
+        var details = new List<string>();
+        if (usage.PrimaryLimit is not null)
+        {
+            details.Add(FormatRateLimit("主利用枠", usage.PrimaryLimit));
+        }
+
+        if (usage.SecondaryLimit is not null)
+        {
+            details.Add(FormatRateLimit("副利用枠", usage.SecondaryLimit));
+        }
+
+        details.Add($"今回の合計: {usage.SessionTotalTokens:N0} tokens");
+        if (usage.LastTurnTokens > 0)
+        {
+            details.Add($"直近の判定: {usage.LastTurnTokens:N0} tokens");
+        }
+
+        if (usage.Credits is { Unlimited: true })
+        {
+            details.Add("クレジット: 無制限");
+        }
+        else if (!string.IsNullOrWhiteSpace(usage.Credits?.Balance))
+        {
+            details.Add($"クレジット残高: {usage.Credits.Balance}");
+        }
+        else if (usage.Credits is { HasCredits: true })
+        {
+            details.Add("クレジット: 利用可能（残高は非公開）");
+        }
+        else if (usage.Credits is { HasCredits: false })
+        {
+            details.Add("クレジット: なし");
+        }
+
+        if (usage.IndividualLimit is not null)
+        {
+            var resetText = usage.IndividualLimit.ResetsAt is null
+                ? string.Empty
+                : $"、{usage.IndividualLimit.ResetsAt.Value.ToLocalTime():M/d HH:mm}リセット";
+            details.Add(
+                $"個別上限: {usage.IndividualLimit.Used} / {usage.IndividualLimit.Limit}" +
+                $"（残り{usage.IndividualLimit.RemainingPercent:0.#}%{resetText}）");
+        }
+
+        if (!string.IsNullOrWhiteSpace(usage.PlanType))
+        {
+            details.Add($"プラン: {usage.PlanType}");
+        }
+
+        if (usage.PrimaryLimit is null && usage.Credits is null)
+        {
+            details.Add("利用枠とクレジットは、契約プランから提供された場合だけ表示されます。");
+        }
+
+        CodexUsageToolTipText.Text = string.Join(Environment.NewLine, details);
+    }
+
+    private static string FormatRateLimit(string label, CodexRateLimitWindow limit)
+    {
+        var metadata = new List<string>();
+        var windowText = limit.WindowDurationMinutes switch
+        {
+            >= 1440 when limit.WindowDurationMinutes % 1440 == 0 =>
+                $"{limit.WindowDurationMinutes / 1440}日枠",
+            >= 60 when limit.WindowDurationMinutes % 60 == 0 =>
+                $"{limit.WindowDurationMinutes / 60}時間枠",
+            > 0 => $"{limit.WindowDurationMinutes}分枠",
+            _ => ""
+        };
+        if (!string.IsNullOrEmpty(windowText))
+        {
+            metadata.Add(windowText);
+        }
+
+        if (limit.ResetsAt is not null)
+        {
+            metadata.Add($"{limit.ResetsAt.Value.ToLocalTime():M/d HH:mm}リセット");
+        }
+
+        var suffix = metadata.Count == 0 ? string.Empty : $"（{string.Join("・", metadata)}）";
+        return $"{label}: {limit.UsedPercent:0.#}%使用{suffix}";
     }
 
     private void ApplyCodexStatus(CodexLoginStatus status)

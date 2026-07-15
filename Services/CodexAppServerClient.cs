@@ -14,11 +14,22 @@ public sealed class CodexAppServerClient : IAsyncDisposable
     };
 
     private readonly SemaphoreSlim _operationLock = new(1, 1);
+    private readonly Dictionary<string, long> _threadTokenTotals = new(StringComparer.Ordinal);
     private Process? _process;
     private StreamWriter? _writer;
     private StreamReader? _reader;
     private Task<string>? _stderrTask;
+    private long _lastTurnTokens;
+    private CodexRateLimitWindow? _primaryLimit;
+    private CodexRateLimitWindow? _secondaryLimit;
+    private CodexCreditsSnapshot? _credits;
+    private CodexSpendControlSnapshot? _individualLimit;
+    private string? _planType;
     private int _requestId;
+
+    public CodexUsageSnapshot Usage { get; private set; } = CodexUsageSnapshot.Empty;
+
+    public event Action<CodexUsageSnapshot>? UsageUpdated;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -58,7 +69,7 @@ public sealed class CodexAppServerClient : IAsyncDisposable
                 {
                     name = "pdf_title_renamer",
                     title = "PDF Title Renamer AI",
-                    version = "0.1.4"
+                    version = "0.1.5"
                 }
             }
         }, cancellationToken);
@@ -69,6 +80,8 @@ public sealed class CodexAppServerClient : IAsyncDisposable
             method = "initialized",
             @params = new { }
         }, cancellationToken);
+
+        await TryRefreshAccountRateLimitsAsync(cancellationToken);
     }
 
     public async Task<TitleSuggestion> SuggestTitleAsync(
@@ -361,10 +374,13 @@ public sealed class CodexAppServerClient : IAsyncDisposable
         }
     }
 
-    private async Task<JsonDocument> ReadResponseAsync(int requestId, CancellationToken cancellationToken)
+    private async Task<JsonDocument> ReadResponseAsync(
+        int requestId,
+        CancellationToken cancellationToken,
+        TimeSpan? timeoutDuration = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(45));
+        timeout.CancelAfter(timeoutDuration ?? TimeSpan.FromSeconds(45));
 
         while (true)
         {
@@ -418,13 +434,252 @@ public sealed class CodexAppServerClient : IAsyncDisposable
 
             try
             {
-                return JsonDocument.Parse(line);
+                var message = JsonDocument.Parse(line);
+                try
+                {
+                    ObserveUsageMessage(message.RootElement);
+                }
+                catch (Exception)
+                {
+                    // Optional usage telemetry must never break title analysis.
+                }
+
+                return message;
             }
             catch (JsonException)
             {
                 // Stdout should be JSONL. Ignore an unexpected diagnostic line defensively.
             }
         }
+    }
+
+    private async Task TryRefreshAccountRateLimitsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var requestId = NextRequestId();
+            await SendAsync(new
+            {
+                id = requestId,
+                method = "account/rateLimits/read"
+            }, cancellationToken);
+
+            using var response = await ReadResponseAsync(
+                requestId,
+                cancellationToken,
+                TimeSpan.FromSeconds(10));
+            if (response.RootElement.TryGetProperty("result", out var result))
+            {
+                ApplyRateLimitsResponse(result);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Usage information is optional and must not block title analysis.
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Older CLI versions and some plans may not expose account usage.
+        }
+    }
+
+    private void ObserveUsageMessage(JsonElement root)
+    {
+        if (!root.TryGetProperty("method", out var methodElement) ||
+            !root.TryGetProperty("params", out var parameters))
+        {
+            return;
+        }
+
+        switch (methodElement.GetString())
+        {
+            case "thread/tokenUsage/updated":
+                ApplyTokenUsage(parameters);
+                break;
+            case "account/rateLimits/updated":
+                if (parameters.TryGetProperty("rateLimits", out var rateLimits))
+                {
+                    ApplyRateLimitSnapshot(rateLimits);
+                }
+
+                break;
+        }
+    }
+
+    private void ApplyTokenUsage(JsonElement parameters)
+    {
+        if (!parameters.TryGetProperty("threadId", out var threadIdElement) ||
+            !parameters.TryGetProperty("tokenUsage", out var tokenUsage) ||
+            !tokenUsage.TryGetProperty("total", out var total) ||
+            !TryGetInt64(total, "totalTokens", out var totalTokens))
+        {
+            return;
+        }
+
+        var threadId = threadIdElement.GetString();
+        if (string.IsNullOrWhiteSpace(threadId))
+        {
+            return;
+        }
+
+        _threadTokenTotals[threadId] = Math.Max(0, totalTokens);
+        if (tokenUsage.TryGetProperty("last", out var last) &&
+            TryGetInt64(last, "totalTokens", out var lastTokens))
+        {
+            _lastTurnTokens = Math.Max(0, lastTokens);
+        }
+
+        PublishUsage();
+    }
+
+    private void ApplyRateLimitsResponse(JsonElement result)
+    {
+        JsonElement selected = default;
+        if (result.TryGetProperty("rateLimitsByLimitId", out var byLimitId) &&
+            byLimitId.ValueKind == JsonValueKind.Object)
+        {
+            if (!byLimitId.TryGetProperty("codex", out selected))
+            {
+                foreach (var property in byLimitId.EnumerateObject())
+                {
+                    selected = property.Value;
+                    break;
+                }
+            }
+        }
+
+        if (selected.ValueKind != JsonValueKind.Object &&
+            result.TryGetProperty("rateLimits", out var legacyRateLimits))
+        {
+            selected = legacyRateLimits;
+        }
+
+        if (selected.ValueKind == JsonValueKind.Object)
+        {
+            ApplyRateLimitSnapshot(selected);
+        }
+    }
+
+    private void ApplyRateLimitSnapshot(JsonElement snapshot)
+    {
+        _primaryLimit = TryParseRateLimitWindow(snapshot, "primary") ?? _primaryLimit;
+        _secondaryLimit = TryParseRateLimitWindow(snapshot, "secondary") ?? _secondaryLimit;
+        _credits = TryParseCredits(snapshot) ?? _credits;
+        _individualLimit = TryParseIndividualLimit(snapshot) ?? _individualLimit;
+        if (snapshot.TryGetProperty("planType", out var planType) &&
+            planType.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(planType.GetString()))
+        {
+            _planType = planType.GetString();
+        }
+
+        PublishUsage();
+    }
+
+    private void PublishUsage()
+    {
+        var sessionTotal = _threadTokenTotals.Values.Sum();
+        var snapshot = new CodexUsageSnapshot(
+            sessionTotal,
+            _lastTurnTokens,
+            _primaryLimit,
+            _secondaryLimit,
+            _credits,
+            _individualLimit,
+            _planType);
+        if (snapshot == Usage)
+        {
+            return;
+        }
+
+        Usage = snapshot;
+        UsageUpdated?.Invoke(snapshot);
+    }
+
+    private static CodexRateLimitWindow? TryParseRateLimitWindow(JsonElement snapshot, string propertyName)
+    {
+        if (!snapshot.TryGetProperty(propertyName, out var window) ||
+            window.ValueKind != JsonValueKind.Object ||
+            !TryGetDouble(window, "usedPercent", out var usedPercent))
+        {
+            return null;
+        }
+
+        int? duration = TryGetInt32(window, "windowDurationMins", out var durationValue)
+            ? durationValue
+            : null;
+        return new CodexRateLimitWindow(
+            Math.Clamp(usedPercent, 0, 100),
+            duration,
+            TryGetUnixTime(window, "resetsAt"));
+    }
+
+    private static CodexCreditsSnapshot? TryParseCredits(JsonElement snapshot)
+    {
+        if (!snapshot.TryGetProperty("credits", out var credits) ||
+            credits.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var hasCredits = credits.TryGetProperty("hasCredits", out var hasCreditsElement) &&
+                         hasCreditsElement.ValueKind == JsonValueKind.True;
+        var unlimited = credits.TryGetProperty("unlimited", out var unlimitedElement) &&
+                        unlimitedElement.ValueKind == JsonValueKind.True;
+        var balance = credits.TryGetProperty("balance", out var balanceElement) &&
+                      balanceElement.ValueKind == JsonValueKind.String
+            ? balanceElement.GetString()
+            : null;
+        return new CodexCreditsSnapshot(hasCredits, unlimited, balance);
+    }
+
+    private static CodexSpendControlSnapshot? TryParseIndividualLimit(JsonElement snapshot)
+    {
+        if (!snapshot.TryGetProperty("individualLimit", out var limit) ||
+            limit.ValueKind != JsonValueKind.Object ||
+            !limit.TryGetProperty("limit", out var limitElement) ||
+            !limit.TryGetProperty("used", out var usedElement) ||
+            !TryGetDouble(limit, "remainingPercent", out var remainingPercent))
+        {
+            return null;
+        }
+
+        return new CodexSpendControlSnapshot(
+            limitElement.GetString() ?? string.Empty,
+            usedElement.GetString() ?? string.Empty,
+            Math.Clamp(remainingPercent, 0, 100),
+            TryGetUnixTime(limit, "resetsAt"));
+    }
+
+    private static bool TryGetInt64(JsonElement parent, string propertyName, out long value)
+    {
+        value = 0;
+        return parent.TryGetProperty(propertyName, out var element) &&
+               element.ValueKind == JsonValueKind.Number &&
+               element.TryGetInt64(out value);
+    }
+
+    private static bool TryGetInt32(JsonElement parent, string propertyName, out int value)
+    {
+        value = 0;
+        return parent.TryGetProperty(propertyName, out var element) &&
+               element.ValueKind == JsonValueKind.Number &&
+               element.TryGetInt32(out value);
+    }
+
+    private static bool TryGetDouble(JsonElement parent, string propertyName, out double value)
+    {
+        value = 0;
+        return parent.TryGetProperty(propertyName, out var element) &&
+               element.ValueKind == JsonValueKind.Number &&
+               element.TryGetDouble(out value);
+    }
+
+    private static DateTimeOffset? TryGetUnixTime(JsonElement parent, string propertyName)
+    {
+        return TryGetInt64(parent, propertyName, out var unixTime)
+            ? DateTimeOffset.FromUnixTimeSeconds(unixTime)
+            : null;
     }
 
     private static string? FindLastAgentMessage(JsonElement turn)
