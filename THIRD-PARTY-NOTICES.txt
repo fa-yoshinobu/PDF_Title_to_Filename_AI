@@ -1,0 +1,32 @@
+PDF Title to Filename AI - Third-Party Notices
+================================================
+
+This application includes the following third-party components:
+
+1. PDFtoImage 5.2.1
+   Copyright (c) 2021-2025 David Sungaila
+   License: MIT
+   Source: https://github.com/sungaila/PDFtoImage
+   Full text: ThirdPartyLicenses/PDFtoImage-5.2.1-LICENSE.txt
+
+2. PDFium 147.0.7690 and bblanchon PDFium Windows binaries
+   Copyright 2014 The PDFium Authors
+   Binary distribution copyright 2014-2025 Benoit Blanchon
+   Licenses: BSD-style, MIT, Apache-2.0 package metadata, and the licenses of bundled PDFium dependencies
+   Sources:
+     https://pdfium.googlesource.com/pdfium/
+     https://github.com/bblanchon/pdfium-binaries
+   Full texts:
+     ThirdPartyLicenses/PDFium-147.0.7690/
+     ThirdPartyLicenses/bblanchon.PDFium.Win32-147.0.7690-NUGET-LICENSE.txt
+
+3. SkiaSharp 3.119.2
+   Copyright (c) 2015-2016 Xamarin, Inc.
+   Copyright (c) 2017-2018 Microsoft Corporation
+   License: MIT, with additional notices for bundled third-party components
+   Source: https://github.com/mono/SkiaSharp
+   Full texts:
+     ThirdPartyLicenses/SkiaSharp-3.119.2-LICENSE.txt
+     ThirdPartyLicenses/SkiaSharp-3.119.2-THIRD-PARTY-NOTICES.txt
+
+The application itself remains licensed under the MIT License in LICENSE.

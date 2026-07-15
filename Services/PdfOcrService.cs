@@ -1,11 +1,12 @@
 using System.IO;
+using PDFtoImage;
+using PDFtoImage.Exceptions;
 using PdfTitleRenamer.Models;
-using Windows.Data.Pdf;
+using SkiaSharp;
 using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage;
-using Windows.Storage.Streams;
 
 namespace PdfTitleRenamer.Services;
 
@@ -28,52 +29,17 @@ public sealed class PdfOcrService
 
         try
         {
-            var storageFile = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(pdfPath));
-            var pdf = await PdfDocument.LoadFromFileAsync(storageFile);
-            if (pdf.PageCount == 0)
-            {
-                throw new InvalidDataException("ページがないPDFです。");
-            }
-
+            var renderedPages = await Task.Run(
+                () => RenderFirstPages(pdfPath, temporaryDirectory, cancellationToken),
+                cancellationToken);
             var pages = new List<OcrPageData>();
-            var pageCount = Math.Min(PagesToRead, checked((int)pdf.PageCount));
 
-            for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+            foreach (var renderedPage in renderedPages)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                using var page = pdf.GetPage((uint)pageIndex);
-                using var rendered = new InMemoryRandomAccessStream();
-
-                var scale = RenderScale;
-                if (page.Size.Width * scale > MaximumRenderWidth)
-                {
-                    scale = MaximumRenderWidth / page.Size.Width;
-                }
-
-                var renderOptions = new PdfPageRenderOptions
-                {
-                    DestinationWidth = Math.Max(1, (uint)Math.Round(page.Size.Width * scale)),
-                    DestinationHeight = Math.Max(1, (uint)Math.Round(page.Size.Height * scale)),
-                    BackgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255)
-                };
-
-                await page.RenderToStreamAsync(rendered, renderOptions);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var imagePath = Path.Combine(temporaryDirectory, $"page-{pageIndex + 1}.png");
-                rendered.Seek(0);
-                using (var input = rendered.GetInputStreamAt(0))
-                using (var dataReader = new DataReader(input))
-                {
-                    var byteCount = checked((uint)rendered.Size);
-                    await dataReader.LoadAsync(byteCount);
-                    var imageBytes = new byte[byteCount];
-                    dataReader.ReadBytes(imageBytes);
-                    await File.WriteAllBytesAsync(imagePath, imageBytes, cancellationToken);
-                }
-
-                rendered.Seek(0);
-                var decoder = await BitmapDecoder.CreateAsync(rendered);
+                var imageFile = await StorageFile.GetFileFromPathAsync(renderedPage.ImagePath);
+                using var imageStream = await imageFile.OpenReadAsync();
+                var decoder = await BitmapDecoder.CreateAsync(imageStream);
                 using var bitmap = await decoder.GetSoftwareBitmapAsync(
                     BitmapPixelFormat.Bgra8,
                     BitmapAlphaMode.Premultiplied);
@@ -91,10 +57,10 @@ public sealed class PdfOcrService
                     .ToArray();
 
                 pages.Add(new OcrPageData(
-                    pageIndex + 1,
-                    renderOptions.DestinationWidth,
-                    renderOptions.DestinationHeight,
-                    imagePath,
+                    renderedPage.PageNumber,
+                    renderedPage.Width,
+                    renderedPage.Height,
+                    renderedPage.ImagePath,
                     lines));
             }
 
@@ -106,6 +72,85 @@ public sealed class PdfOcrService
             throw;
         }
     }
+
+    private static IReadOnlyList<RenderedPage> RenderFirstPages(
+        string pdfPath,
+        string temporaryDirectory,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var pdfStream = File.OpenRead(Path.GetFullPath(pdfPath));
+            var pageSizes = Conversion.GetPageSizes(pdfStream, leaveOpen: true);
+            if (pageSizes.Count == 0)
+            {
+                throw new InvalidDataException("ページがないPDFです。");
+            }
+
+            var renderedPages = new List<RenderedPage>();
+            var pageCount = Math.Min(PagesToRead, pageSizes.Count);
+            for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var pageSize = pageSizes[pageIndex];
+                var scale = RenderScale;
+                if (pageSize.Width * scale > MaximumRenderWidth)
+                {
+                    scale = MaximumRenderWidth / pageSize.Width;
+                }
+
+                var width = Math.Max(1, (int)Math.Round(pageSize.Width * scale));
+                var height = Math.Max(1, (int)Math.Round(pageSize.Height * scale));
+                var options = new RenderOptions(
+                    Width: width,
+                    Height: height,
+                    BackgroundColor: SKColors.White);
+
+                pdfStream.Position = 0;
+                using var image = Conversion.ToImage(
+                    pdfStream,
+                    page: pageIndex,
+                    leaveOpen: true,
+                    options: options);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var imagePath = Path.Combine(temporaryDirectory, $"page-{pageIndex + 1}.png");
+                using (var output = File.Create(imagePath))
+                {
+                    if (!image.Encode(output, SKEncodedImageFormat.Png, 100))
+                    {
+                        throw new InvalidDataException("PDFページをPNG画像へ変換できませんでした。");
+                    }
+                }
+
+                renderedPages.Add(new RenderedPage(
+                    pageIndex + 1,
+                    checked((uint)image.Width),
+                    checked((uint)image.Height),
+                    imagePath));
+            }
+
+            return renderedPages;
+        }
+        catch (PdfPasswordProtectedException ex)
+        {
+            throw new InvalidDataException("パスワードが必要なPDFです。パスワード保護を解除してから再実行してください。", ex);
+        }
+        catch (PdfUnsupportedSecuritySchemeException ex)
+        {
+            throw new InvalidDataException("PDFiumが対応していないセキュリティ方式のPDFです。", ex);
+        }
+        catch (PdfInvalidFormatException ex)
+        {
+            throw new InvalidDataException("PDFの形式が不正または破損しています。", ex);
+        }
+        catch (PdfCannotOpenFileException ex)
+        {
+            throw new IOException("PDFファイルを開けませんでした。使用中またはアクセス権を確認してください。", ex);
+        }
+    }
+
+    private sealed record RenderedPage(int PageNumber, uint Width, uint Height, string ImagePath);
 
     private static OcrEngine CreateOcrEngine()
     {

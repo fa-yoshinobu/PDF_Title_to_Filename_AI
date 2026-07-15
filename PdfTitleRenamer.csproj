@@ -5,16 +5,45 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PdfTitleRenamer</AssemblyName>
+    <AssemblyName>PdfTitleRenamer_AI</AssemblyName>
     <RootNamespace>PdfTitleRenamer</RootNamespace>
+    <AssemblyTitle>PDF Title to Filename AI</AssemblyTitle>
+    <Company>fa-yoshinobu</Company>
+    <Copyright>Copyright © 2026 fa-yoshinobu</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.4</Version>
+    <ApplicationIcon>Icons\app.ico</ApplicationIcon>
+    <Version>0.1.6</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
     <Product>PDFタイトル一括リネーム AI版</Product>
     <Description>PDF Title to FilenameのAI版。Windows OCRとCodexでPDFのタイトルを推定し、安全に一括リネームします。</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Icons\app.ico" />
+    <EmbeddedResource Include="LICENSE" LogicalName="PdfTitleRenamer.LICENSE" />
+    <EmbeddedResource Include="THIRD-PARTY-NOTICES.txt" LogicalName="PdfTitleRenamer.THIRD-PARTY-NOTICES.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="PDFtoImage" Version="5.2.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <None Update="README.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="SPEC.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Update="ThirdPartyLicenses\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
+  <Target Name="RemoveNativeDebugSymbolsFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>
