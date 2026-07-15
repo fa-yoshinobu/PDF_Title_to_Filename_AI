@@ -57,8 +57,8 @@ public sealed class CodexAppServerClient : IAsyncDisposable
                 clientInfo = new
                 {
                     name = "pdf_title_renamer",
-                    title = "PDF Title Renamer",
-                    version = "0.1.3"
+                    title = "PDF Title Renamer AI",
+                    version = "0.1.4"
                 }
             }
         }, cancellationToken);
