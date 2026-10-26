@@ -100,3 +100,19 @@ dotnet publish .\PdfTitleRenamer.csproj -c Release -o .\publish
 ## ライセンス
 
 本ソフトウェア本体は [MIT License](LICENSE) で公開します。アプリ上部の「ライセンス」から本文を表示できます。PDFium、PDFtoImage、SkiaSharpなど同梱コンポーネントには、それぞれのライセンスが適用されます。詳細はアプリ内の「第三者ライセンス」タブ、[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)、`ThirdPartyLicenses` を参照してください。
+
+## Release distribution (next release)
+
+The fixed-name ZIP and checksum links below become available with the next standard release. Existing release assets and the download links above remain unchanged.
+
+- [Latest Windows x64 ZIP](https://github.com/fa-yoshinobu/PDF_Title_to_Filename_AI/releases/latest/download/PdfTitleRenamer_AI-win-x64.zip)
+- [ZIP SHA-256 checksum](https://github.com/fa-yoshinobu/PDF_Title_to_Filename_AI/releases/latest/download/PdfTitleRenamer_AI-win-x64.zip.sha256)
+- [Changelog](CHANGELOG.md) / [TODO](TODO.md)
+
+Extract the ZIP file and run `PdfTitleRenamer_AI.exe`. Keep the license files and companion folders together.
+
+Windows 10 version 2004 or later, or Windows 11 (x64). The .NET runtime and PDFium are included. AI analysis requires Codex CLI and a signed-in account. AI analysis sends images of the first two PDF pages and OCR text to OpenAI through Codex; review your data handling requirements before using it.
+
+Release notes and VirusTotal scan messages are in English. Existing project documents may keep their current language.
+
+Maintainers: update the English Changes section in `.github/release-notes.md` from the relevant CHANGELOG entries before releasing. The release workflow publishes the ZIP and checksum, then scans the actual published executables. Use the `Scan release with VirusTotal` workflow with a release tag to retry an incomplete scan. See the [shared release standard](https://github.com/fa-yoshinobu/release_standard).
