@@ -101,9 +101,9 @@ dotnet publish .\PdfTitleRenamer.csproj -c Release -o .\publish
 
 本ソフトウェア本体は [MIT License](LICENSE) で公開します。アプリ上部の「ライセンス」から本文を表示できます。PDFium、PDFtoImage、SkiaSharpなど同梱コンポーネントには、それぞれのライセンスが適用されます。詳細はアプリ内の「第三者ライセンス」タブ、[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)、`ThirdPartyLicenses` を参照してください。
 
-## Release distribution (next release)
+## Release distribution
 
-The fixed-name ZIP and checksum links below become available with the next standard release. Existing release assets and the download links above remain unchanged.
+The fixed-name ZIP and checksum links below are available for the current release. Older releases retain their original assets.
 
 - [Latest Windows x64 ZIP](https://github.com/fa-yoshinobu/PDF_Title_to_Filename_AI/releases/latest/download/PdfTitleRenamer_AI-win-x64.zip)
 - [ZIP SHA-256 checksum](https://github.com/fa-yoshinobu/PDF_Title_to_Filename_AI/releases/latest/download/PdfTitleRenamer_AI-win-x64.zip.sha256)
