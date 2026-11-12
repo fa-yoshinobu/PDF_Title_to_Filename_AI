@@ -9,21 +9,21 @@ Requirements: Windows 10 version 2004 or later, or Windows 11 (x64). The .NET ru
 
 ## Changes
 ### Added
-- Select a single PDF for analysis and renaming without loading other PDFs in its folder. Folder selection remains available.
-- Choose the first 1, 2 (default), or 5 pages for title analysis.
-- Review and edit a candidate in a dedicated detail pane, open its source PDF, and inspect every final filename before renaming.
-- Keep a visible warning that PDF page images and OCR text, including any confidential or personal information they contain, are sent to OpenAI through Codex.
+- Open one PDF or one folder by dragging it onto the window.
+- Review confidence values, low-confidence warnings and colored status labels in the refreshed interface.
+- Rename files when only letter case changes and inspect those changes in the final preview.
 
 ### Changed
-- Refined the interface with reference to the Digital Agency design system and refreshed the application icon.
-- Skip existing candidates by default; explicitly opt in to reanalysis when needed. Failed or cancelled reanalysis preserves the previous candidate with a visible status.
-- Improved title instructions to distinguish document titles from chapter headings and cite supporting page numbers.
-- Updated the bundled .NET runtime to 10.0.14 and rendering libraries to PDFtoImage 5.4.0, SkiaSharp 4.155.0 and PDFium 159.0.8138.
+- Distribute only one EXE, with the MIT license, third-party notices and all 23 third-party license documents embedded for in-app reading.
+- Organize sources under `src`, the specification under `docs`, and build outputs under `artifacts`.
+- Refresh the README and add lossless PNG screen examples made with fictional data.
+- Run Codex from the temporary OCR image folder instead of the source PDF folder.
 
 ### Fixed
-- Bound both image dimensions for Windows OCR, including tall portrait pages.
-- Avoid directory and batch filename collisions, Windows reserved names and splitting Unicode surrogate pairs.
-- Update selection counts and action buttons immediately; preserve candidates when loading a new selection fails.
+- Distinguish login and analysis timeouts from cancellation, and restart the App Server after interrupted or failed transport operations.
+- Ignore notifications for other threads and retry an empty completed response once.
+- Remove stale temporary OCR folders left by interrupted runs.
+- Check that the distribution contains only the application EXE before creating the ZIP.
 
 <!-- virustotal:start -->
 {{VIRUSTOTAL_CONTENT}}
