@@ -112,9 +112,11 @@ public sealed class CodexAppServerClient : IAsyncDisposable
     public async Task<TitleSuggestion> SuggestTitleAsync(
         OcrDocument document,
         string workingDirectory,
+        AnalysisProfile profile,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(profile);
         await _operationLock.WaitAsync(cancellationToken);
         try
         {
@@ -123,7 +125,7 @@ public sealed class CodexAppServerClient : IAsyncDisposable
             {
                 try
                 {
-                    return await SuggestTitleOnceAsync(document, workingDirectory, cancellationToken);
+                    return await SuggestTitleOnceAsync(document, workingDirectory, profile, cancellationToken);
                 }
                 catch (InvalidDataException ex) when (attempt == 0 && IsEmptyResponse(ex))
                 {
@@ -147,6 +149,7 @@ public sealed class CodexAppServerClient : IAsyncDisposable
     private async Task<TitleSuggestion> SuggestTitleOnceAsync(
         OcrDocument document,
         string workingDirectory,
+        AnalysisProfile profile,
         CancellationToken cancellationToken)
     {
         var threadRequestId = NextRequestId();
@@ -184,10 +187,10 @@ public sealed class CodexAppServerClient : IAsyncDisposable
             @params = new
             {
                 threadId,
-                input = BuildInputs(document),
+                input = BuildInputs(document, profile),
                 approvalPolicy = "never",
                 sandboxPolicy = new { type = "readOnly", networkAccess = false },
-                effort = "medium",
+                effort = profile.ReasoningEffort,
                 summary = "none",
                 outputSchema = CreateOutputSchema()
             }
@@ -276,18 +279,18 @@ public sealed class CodexAppServerClient : IAsyncDisposable
         }
     }
 
-    private static object[] BuildInputs(OcrDocument document)
+    private static object[] BuildInputs(OcrDocument document, AnalysisProfile profile)
     {
         var inputs = new List<object>
         {
             new
             {
                 type = "text",
-                text = BuildPrompt(document)
+                text = BuildPrompt(document, profile)
             }
         };
 
-        foreach (var page in document.Pages)
+        foreach (var page in document.Pages.Take(profile.PageCount))
         {
             inputs.Add(new
             {
@@ -305,16 +308,19 @@ public sealed class CodexAppServerClient : IAsyncDisposable
         return inputs.ToArray();
     }
 
-    private static string BuildPrompt(OcrDocument document)
+    private static string BuildPrompt(OcrDocument document, AnalysisProfile profile)
     {
-        var pages = document.Pages.Select(page => new
+        var pages = document.Pages.Take(profile.PageCount).Select(page => new
         {
             page = page.PageNumber,
             width = Math.Round(page.Width, 1),
             height = Math.Round(page.Height, 1),
             lines = page.Lines
                 .Where(line => !string.IsNullOrWhiteSpace(line.Text))
-                .Take(300)
+                // Retain large title-like lines even when they occur below body text.
+                .OrderByDescending(line => line.Words.Count == 0 ? 0 : line.Words.Max(word => word.Height))
+                .Take(profile.MaximumOcrLines)
+                .OrderBy(line => line.Words.Count == 0 ? 0 : line.Words.Min(word => word.Y))
                 .Select(line =>
                 {
                     var words = line.Words;

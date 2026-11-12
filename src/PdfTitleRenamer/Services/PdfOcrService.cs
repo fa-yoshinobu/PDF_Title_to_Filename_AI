@@ -44,10 +44,11 @@ public sealed class PdfOcrService
         }
     }
 
-    public async Task<OcrDocument> ReadFirstPagesAsync(string pdfPath, CancellationToken cancellationToken, int pagesToRead = 2)
+    public async Task<OcrDocument> ReadFirstPagesAsync(string pdfPath, CancellationToken cancellationToken, int pagesToRead = 2, int maximumImageDimension = 2400)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pdfPath);
         if (pagesToRead is < 1 or > 5) throw new ArgumentOutOfRangeException(nameof(pagesToRead));
+        if (maximumImageDimension < 512 || maximumImageDimension > MaximumRenderDimension) throw new ArgumentOutOfRangeException(nameof(maximumImageDimension));
         cancellationToken.ThrowIfCancellationRequested();
 
         var engine = CreateOcrEngine();
@@ -57,7 +58,7 @@ public sealed class PdfOcrService
         try
         {
             var renderedPages = await Task.Run(
-                () => RenderFirstPages(pdfPath, temporaryDirectory, pagesToRead, cancellationToken),
+                () => RenderFirstPages(pdfPath, temporaryDirectory, pagesToRead, maximumImageDimension, cancellationToken),
                 cancellationToken);
             var pages = new List<OcrPageData>();
 
@@ -105,6 +106,7 @@ public sealed class PdfOcrService
         string pdfPath,
         string temporaryDirectory,
         int pagesToRead,
+        int imageDimensionLimit,
         CancellationToken cancellationToken)
     {
         try
@@ -123,7 +125,7 @@ public sealed class PdfOcrService
                 cancellationToken.ThrowIfCancellationRequested();
                 var pageSize = pageSizes[pageIndex];
                 // Both dimensions must fit Windows OCR, including long portrait pages.
-                var maximumDimension = Math.Min(MaximumRenderDimension, OcrEngine.MaxImageDimension);
+                var maximumDimension = Math.Min((uint)imageDimensionLimit, OcrEngine.MaxImageDimension);
                 var scale = Math.Min(RenderScale, maximumDimension / Math.Max(pageSize.Width, pageSize.Height));
 
                 var width = Math.Max(1, (int)Math.Round(pageSize.Width * scale));

@@ -197,7 +197,7 @@ public partial class MainWindow : Window
         if (_isBusy) return;
         CommitEdits();
         var targets = GetAnalysisTargets();
-        var pagesToRead = int.Parse((string)((ComboBoxItem)PageCountComboBox.SelectedItem).Tag);
+        var profile = (AnalysisProfile)AnalysisProfileComboBox.SelectedItem;
         if (ReanalyzeCheckBox.IsChecked == true && targets.Any(item => !string.IsNullOrWhiteSpace(item.SuggestedName)) &&
             MessageBox.Show(this, "選択したPDFの既存の候補・手動編集を新しい推定結果で置き換えます。続けますか？",
                 "再解析の確認", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
@@ -239,7 +239,7 @@ public partial class MainWindow : Window
 
                 try
                 {
-                    using var document = await _ocrService.ReadFirstPagesAsync(item.SourcePath, cancellationToken, pagesToRead);
+                    using var document = await _ocrService.ReadFirstPagesAsync(item.SourcePath, cancellationToken, profile.PageCount, profile.MaximumImageDimension);
                     item.Status = "AI判定中";
                     OperationStatusText.Text = $"{index + 1}/{targets.Length}  AI判定: {item.CurrentName}";
 
@@ -248,6 +248,7 @@ public partial class MainWindow : Window
                     var suggestion = await codex.SuggestTitleAsync(
                         document,
                         document.TemporaryDirectory,
+                        profile,
                         cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                     var safeTitle = FileRenameService.SanitizeTitle(suggestion.Title);
@@ -504,7 +505,7 @@ public partial class MainWindow : Window
         ChooseFolderButton.IsEnabled = !isBusy;
         ChooseFileButton.IsEnabled = !isBusy;
         SelectionActions.IsEnabled = !isBusy;
-        PageCountComboBox.IsEnabled = !isBusy;
+        AnalysisProfileComboBox.IsEnabled = !isBusy;
         ReanalyzeCheckBox.IsEnabled = !isBusy;
         UpdateButtonStates();
     }

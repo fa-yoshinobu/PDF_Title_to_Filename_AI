@@ -1,6 +1,7 @@
 ﻿<Window x:Class="PdfTitleRenamer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:PdfTitleRenamer.Models"
         Title="PDFタイトル一括リネーム AI版" Width="1280" Height="880" MinWidth="1000" MinHeight="760"
         Icon="Icons/app.ico" WindowStartupLocation="CenterScreen" Background="{StaticResource PageBrush}"
         FontFamily="Yu Gothic UI" FontSize="14" Foreground="{StaticResource InkBrush}" UseLayoutRounding="True"
@@ -89,18 +90,16 @@
                     <TextBlock Text="タイトルを推定する" Style="{StaticResource StepTitleStyle}"/>
                 </StackPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="読み取る範囲" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="PageCountComboBox" SelectedIndex="1" MinWidth="210" MinHeight="40" VerticalContentAlignment="Center" AutomationProperties.Name="読み取るページ数" SelectionChanged="AnalysisOptions_Changed" Margin="0,4,16,4" ToolTip="ページ数が多いほど推定材料が増えますが、時間と利用量も増えます。">
-                        <ComboBoxItem Content="先頭1ページ（速く）" Tag="1"/>
-                        <ComboBoxItem Content="先頭2ページ（標準）" Tag="2"/>
-                        <ComboBoxItem Content="先頭5ページ（詳しく）" Tag="5"/>
-                    </ComboBox>
+                    <TextBlock Text="解析モード" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="AnalysisProfileComboBox" ItemsSource="{x:Static models:AnalysisProfile.All}" DisplayMemberPath="DisplayName" SelectedIndex="0"
+                              MinWidth="230" MinHeight="40" VerticalContentAlignment="Center" AutomationProperties.Name="解析モード（軽い順）" SelectionChanged="AnalysisOptions_Changed" Margin="0,4,16,4"
+                              ToolTip="軽量・標準・詳細の順に選べます。ページ数、画像サイズ、OCR情報量、推論量をまとめて切り替えます。"/>
                     <CheckBox x:Name="ReanalyzeCheckBox" Content="候補があるPDFも再解析" VerticalAlignment="Center" Margin="0,0,16,0" Checked="AnalysisOptions_Changed" Unchecked="AnalysisOptions_Changed" ToolTip="既存の候補を置き換えます。通常は候補のないPDFだけを解析します。"/>
                     <Button x:Name="AnalyzeButton" Content="タイトルを推定" Style="{StaticResource PrimaryButton}" IsEnabled="False" Click="AnalyzeButton_Click" Margin="0,4"/>
                     <Button x:Name="CancelButton" Content="中止" Margin="8,4,0,4" Visibility="Collapsed" Click="CancelButton_Click"/>
                 </WrapPanel>
-                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0"
-                           Text="標準では候補がないPDFだけを処理します。1ページは速く、5ページは詳しく確認します。ページ数が多いほど時間・利用量が増えます。"/>
+                <TextBlock x:Name="AnalysisProfileDescriptionText" Grid.Row="1" Grid.Column="1" Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0"
+                           Text="{Binding SelectedItem.Description, ElementName=AnalysisProfileComboBox}"/>
                 <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#FFF8E1" BorderBrush="#E0B64F" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

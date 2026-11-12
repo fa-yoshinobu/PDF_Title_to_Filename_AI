@@ -5,25 +5,19 @@
 ## Getting started
 Extract the ZIP file and run `PdfTitleRenamer_AI.exe`. The ZIP contains only this executable. Full license texts are embedded and available in the app's license window.
 
-Requirements: Windows 10 version 2004 or later, or Windows 11 (x64). The .NET runtime and PDFium are included. AI analysis requires Codex CLI and a signed-in account. AI analysis sends images of the selected first 1, 2 (default), or 5 PDF pages and OCR text to OpenAI through Codex; review your data handling requirements before using it.
+Requirements: Windows 10 version 2004 or later, or Windows 11 (x64). The .NET runtime and PDFium are included. AI analysis requires Codex CLI and a signed-in account. AI analysis sends images of the selected first 1 (default), 2, or 5 PDF pages and OCR text to OpenAI through Codex; review your data handling requirements before using it.
 
 ## Changes
 ### Added
-- Open one PDF or one folder by dragging it onto the window.
-- Review confidence values, low-confidence warnings and colored status labels in the refreshed interface.
-- Rename files when only letter case changes and inspect those changes in the final preview.
+- Choose Light, Standard or Detailed analysis in that order, with Light selected by default.
+- Switch page count, image size, OCR text limits and reasoning effort together, with the selected limits explained in the interface.
+- Light uses one page, images up to 1600 pixels on the longest side, up to 60 OCR lines per page and low reasoning effort.
+- Standard uses two pages, up to 2400 pixels, 150 OCR lines per page and medium reasoning effort. Detailed uses five pages, up to 2400 pixels, 300 OCR lines per page and high reasoning effort.
 
 ### Changed
-- Distribute only one EXE, with the MIT license, third-party notices and all 23 third-party license documents embedded for in-app reading.
-- Organize sources under `src`, the specification under `docs`, and build outputs under `artifacts`.
-- Refresh the README and add lossless PNG screen examples made with fictional data.
-- Run Codex from the temporary OCR image folder instead of the source PDF folder.
-
-### Fixed
-- Distinguish login and analysis timeouts from cancellation, and restart the App Server after interrupted or failed transport operations.
-- Ignore notifications for other threads and retry an empty completed response once.
-- Remove stale temporary OCR folders left by interrupted runs.
-- Check that the distribution contains only the application EXE before creating the ZIP.
+- Prioritize larger OCR text lines when reducing the text sent to Codex, preserving title evidence and page coordinates.
+- Refresh the README, specification and lossless fictional-data screen example for the new profile selector.
+- Heavier profiles require explicit selection; the app does not automatically repeat analysis at a higher setting. Actual token savings and accuracy depend on the document and model and have not been benchmarked against live AI requests.
 
 <!-- virustotal:start -->
 {{VIRUSTOTAL_CONTENT}}

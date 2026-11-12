@@ -33,6 +33,34 @@ try
     Check(service.Execute(race).Errors.Count == 1 && File.ReadAllText(race[0].TargetPath) == "existing" && File.Exists(d.SourcePath), "target appearing after preview is never overwritten");
     var missing = new PdfRenameItem(Path.Combine(root, "missing.pdf")) { SuggestedName = "missing.pdf" };
     Check(service.Execute(service.BuildPlan([missing])).Errors.Count == 1, "missing unchanged source reports failure");
+    Check(AnalysisProfile.All.SequenceEqual(new[] { AnalysisProfile.Light, AnalysisProfile.Standard, AnalysisProfile.Detailed }), "analysis profiles are ordered from light to detailed");
+    Check(AnalysisProfile.Light.ReasoningEffort == "low" && AnalysisProfile.Standard.ReasoningEffort == "medium"
+        && AnalysisProfile.Detailed.ReasoningEffort == "high", "profiles select increasing reasoning effort");
+    var fixtureLines = Enumerable.Range(0, 400).Select(i => new OcrLineData("Body " + i,
+        new[] { new OcrWordData("Body", 10, i * 2, 80, 10) })).ToList();
+    fixtureLines.Add(new OcrLineData("Fictional document title", new[] { new OcrWordData("Title", 100, 900, 500, 60) }));
+    using (var promptDocument = new OcrDocument(Path.Combine(root, "not-created"),
+        Enumerable.Range(1, 5).Select(i => new OcrPageData(i, 1600, 1600, Path.Combine(root, $"fictional-{i}.png"), fixtureLines)).ToArray()))
+    {
+        var lengths = new List<int>();
+        foreach (var profile in AnalysisProfile.All)
+        {
+            var input = typeof(CodexAppServerClient).GetMethod("BuildInputs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                .Invoke(null, new object[] { promptDocument, profile });
+            using var payload = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(input));
+            Check(payload.RootElement.EnumerateArray().Count(item => item.GetProperty("type").GetString() == "localImage") == profile.PageCount,
+                profile.ReasoningEffort + " profile limits image count");
+            var prompt = payload.RootElement[0].GetProperty("text").GetString()!;
+            const string marker = "OCRレイアウトJSON:";
+            using var ocrPayload = System.Text.Json.JsonDocument.Parse(prompt[(prompt.IndexOf(marker, StringComparison.Ordinal) + marker.Length)..].Trim());
+            Check(ocrPayload.RootElement.GetArrayLength() == profile.PageCount && ocrPayload.RootElement.EnumerateArray().All(page =>
+                page.GetProperty("lines").GetArrayLength() == profile.MaximumOcrLines
+                && page.GetProperty("lines").EnumerateArray().Any(line => line.GetProperty("text").GetString() == "Fictional document title")),
+                profile.ReasoningEffort + " profile bounds OCR while retaining the large title near the bottom");
+            lengths.Add(prompt.Length);
+        }
+        Check(lengths[0] < lengths[1] && lengths[1] < lengths[2], "lighter profiles produce smaller OCR prompts");
+    }
     var lower = Add("lower", "LOWER.pdf");
     var casePlan = service.BuildPlan([lower]);
     Check(casePlan[0].IsCaseOnlyChange && !casePlan[0].IsUnchanged, "case-only change is planned as a rename");
@@ -61,6 +89,9 @@ try
         using var one = await ocr.ReadFirstPagesAsync(fixture, CancellationToken.None, 1);
         Check(one.Pages.Count == 1 && one.Pages.All(p => p.Width <= 2400 && p.Height <= 2400), "one-page OCR and image bounds");
         Check(one.Pages[0].Lines.Any(l => l.Text.Contains("TEST", StringComparison.OrdinalIgnoreCase)), "actual Windows OCR recognizes fixture title");
+        using var light = await ocr.ReadFirstPagesAsync(fixture, CancellationToken.None, AnalysisProfile.Light.PageCount, AnalysisProfile.Light.MaximumImageDimension);
+        Check(light.Pages.Count == 1 && light.Pages.All(p => p.Width <= 1600 && p.Height <= 1600)
+            && light.Pages[0].Lines.Any(l => l.Text.Contains("TEST", StringComparison.OrdinalIgnoreCase)), "light profile renders smaller images and preserves OCR title recognition");
         using var five = await ocr.ReadFirstPagesAsync(fixture, CancellationToken.None, 5);
         Check(five.Pages.Count == 5 && five.Pages.All(p => p.Width <= 2400 && p.Height <= 2400), "five-page OCR range including tall portrait page");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
@@ -89,6 +120,12 @@ try
             }), "every embedded third-party license is fully visible without companion files");
             var window = new MainWindow();
             window.Measure(new Size(1000, 760)); window.Arrange(new Rect(0, 0, 1000, 760)); window.UpdateLayout();
+            var profilePicker = (ComboBox)window.FindName("AnalysisProfileComboBox");
+            Check(ReferenceEquals(profilePicker.SelectedItem, AnalysisProfile.Light), "light analysis is selected by default");
+            profilePicker.SelectedItem = AnalysisProfile.Detailed;
+            window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+            Check(((TextBlock)window.FindName("AnalysisProfileDescriptionText")).Text == AnalysisProfile.Detailed.Description, "profile description follows the selected mode");
+            profilePicker.SelectedItem = AnalysisProfile.Light;
             Check(((Button)window.FindName("RenameButton")).IsEnabled == false, "empty UI disables rename");
             typeof(MainWindow).GetMethod("LoadFolder", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, [root]);
             window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
@@ -137,6 +174,7 @@ try
             Check(window.Items.Count == 1 && window.Items[0].CurrentName == "Single renamed.pdf", "invalid file selection preserves the current list");
             var busy = typeof(MainWindow).GetMethod("SetBusy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             busy.Invoke(window, [true, "Testing"]);
+            Check(!profilePicker.IsEnabled, "analysis profile cannot change during a running batch");
             Check(!((Button)window.FindName("ChooseFileButton")).IsEnabled && !((Button)window.FindName("ChooseFolderButton")).IsEnabled, "both selection methods are disabled during analysis");
             busy.Invoke(window, [false, "Ready"]);
             typeof(MainWindow).GetMethod("LoadFolder", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, [root]);

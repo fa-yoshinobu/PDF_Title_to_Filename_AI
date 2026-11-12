@@ -6,6 +6,17 @@ All notable changes are recorded from this point onward.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
+### Added
+
+- Offer Light, Standard and Detailed analysis profiles, defaulting to Light. Profiles control page count, image dimensions, OCR line limits and reasoning effort together.
+
+### Changed
+
+- Prioritize larger OCR text lines when selecting title evidence, and retain their page coordinates while limiting the text sent to Codex.
+- Show the selected profile's limits in the interface and update the README, specification and lossless screen example. Heavier profiles are selected explicitly, without automatic reanalysis.
+
 ## [0.3.0] - 2026-11-13
 
 ### Added
