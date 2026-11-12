@@ -1,0 +1,242 @@
+﻿<Window x:Class="PdfTitleRenamer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PDFタイトル一括リネーム AI版" Width="1280" Height="880" MinWidth="1000" MinHeight="760"
+        Icon="Icons/app.ico" WindowStartupLocation="CenterScreen" Background="{StaticResource PageBrush}"
+        FontFamily="Yu Gothic UI" FontSize="14" Foreground="{StaticResource InkBrush}" UseLayoutRounding="True"
+        AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
+        Loaded="Window_Loaded" Closing="Window_Closing">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <Style x:Key="CellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="8,0"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        </Style>
+        <Style x:Key="ConfidenceCellText" TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="FontFamily" Value="Consolas, Yu Gothic UI"/>
+            <Setter Property="ToolTip" Value="AIの自己評価です。正しさを保証しません。"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource WarningTextBrush}"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="DetailLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+            <Setter Property="Margin" Value="0,14,0,4"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,3" Padding="24,12">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="PDFタイトル一括リネーム" FontSize="22" FontWeight="Bold"/>
+                    <TextBlock Text="AI版  ・  本文から名前を提案し、確認してから変更します" Style="{StaticResource MutedTextStyle}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border x:Name="CodexStatusBadge" Background="#595959" Padding="10,5" CornerRadius="14" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="8" Height="8" Fill="White" Opacity="0.85" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                <TextBlock x:Name="CodexStatusText" Text="Codex確認中…" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+                            </StackPanel>
+                        </Border>
+                        <Button x:Name="LoginButton" Content="ChatGPTにログイン" Click="LoginButton_Click" MinHeight="36" Padding="14,6"/>
+                        <Button Content="ライセンス" Click="LicenseButton_Click" Margin="8,0,0,0" MinHeight="36" Padding="14,6"/>
+                    </StackPanel>
+                    <TextBlock x:Name="CodexUsageText" Text="利用枠 — / 今回 0 tokens" HorizontalAlignment="Right" Margin="0,6,0,0" FontSize="12" Foreground="{StaticResource MutedBrush}" Cursor="Help">
+                        <TextBlock.ToolTip><ToolTip><TextBlock x:Name="CodexUsageToolTipText" MaxWidth="400" TextWrapping="Wrap" Text="解析を開始すると利用量を表示します。"/></ToolTip></TextBlock.ToolTip>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Step 1 -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="24,16,24,0" Padding="20,14">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource StepNumberStyle}"><TextBlock Text="1" Style="{StaticResource StepNumberTextStyle}"/></Border>
+                    <TextBlock x:Name="SelectionModeText" Text="PDFを選ぶ" Style="{StaticResource StepTitleStyle}"/>
+                </StackPanel>
+                <TextBox x:Name="FolderTextBox" Grid.Column="1" IsReadOnly="True" AutomationProperties.Name="対象のPDFまたはフォルダ" Text="PDFファイルまたはフォルダを選択してください" Margin="0,0,12,0" Background="{StaticResource SubtleBrush}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="ChooseFileButton" Content="PDFファイルを選択" Click="ChooseFileButton_Click" ToolTip="選んだ1ファイルだけを解析・リネームします。" Margin="0,0,8,0"/>
+                    <Button x:Name="ChooseFolderButton" Content="フォルダを選択" Click="ChooseFolderButton_Click" ToolTip="フォルダ直下のPDFを一覧に読み込みます。PDFやフォルダを画面へドラッグ＆ドロップしても読み込めます。"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Step 2 -->
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="24,12,24,12" Padding="20,14">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource StepNumberStyle}"><TextBlock Text="2" Style="{StaticResource StepNumberTextStyle}"/></Border>
+                    <TextBlock Text="タイトルを推定する" Style="{StaticResource StepTitleStyle}"/>
+                </StackPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="読み取る範囲" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="PageCountComboBox" SelectedIndex="1" MinWidth="210" MinHeight="40" VerticalContentAlignment="Center" AutomationProperties.Name="読み取るページ数" SelectionChanged="AnalysisOptions_Changed" Margin="0,4,16,4" ToolTip="ページ数が多いほど推定材料が増えますが、時間と利用量も増えます。">
+                        <ComboBoxItem Content="先頭1ページ（速く）" Tag="1"/>
+                        <ComboBoxItem Content="先頭2ページ（標準）" Tag="2"/>
+                        <ComboBoxItem Content="先頭5ページ（詳しく）" Tag="5"/>
+                    </ComboBox>
+                    <CheckBox x:Name="ReanalyzeCheckBox" Content="候補があるPDFも再解析" VerticalAlignment="Center" Margin="0,0,16,0" Checked="AnalysisOptions_Changed" Unchecked="AnalysisOptions_Changed" ToolTip="既存の候補を置き換えます。通常は候補のないPDFだけを解析します。"/>
+                    <Button x:Name="AnalyzeButton" Content="タイトルを推定" Style="{StaticResource PrimaryButton}" IsEnabled="False" Click="AnalyzeButton_Click" Margin="0,4"/>
+                    <Button x:Name="CancelButton" Content="中止" Margin="8,4,0,4" Visibility="Collapsed" Click="CancelButton_Click"/>
+                </WrapPanel>
+                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0"
+                           Text="標準では候補がないPDFだけを処理します。1ページは速く、5ページは詳しく確認します。ページ数が多いほど時間・利用量が増えます。"/>
+                <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#FFF8E1" BorderBrush="#E0B64F" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="&#x26A0;" FontSize="18" Foreground="#8A6100" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="注意：PDFの内容がAI（OpenAI）へ送信されます" FontWeight="Bold" TextWrapping="Wrap" Foreground="#1A1A1A"/>
+                            <TextBlock Text="解析すると、選択範囲のページ画像・OCR文字列がCodex経由で送信されます。画像内の個人情報・機密情報も含まれるため、送信してよいPDFか事前に確認してください。" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="#1A1A1A" FontSize="13"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Step 3 -->
+        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Margin="24,0">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
+                <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,12">
+                    <StackPanel x:Name="SelectionActions" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="すべて選択" Click="SelectAllButton_Click" MinHeight="34" Padding="12,4"/>
+                        <Button Content="選択を解除" Click="ClearSelectionButton_Click" Margin="8,0,0,0" MinHeight="34" Padding="12,4"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Style="{StaticResource StepNumberStyle}"><TextBlock Text="3" Style="{StaticResource StepNumberTextStyle}"/></Border>
+                        <TextBlock Text="候補を確認・編集する" Style="{StaticResource StepTitleStyle}"/>
+                        <TextBlock x:Name="SelectionSummaryText" Text="PDF 0件 / 選択 0件" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+                <Grid Grid.Row="1" Margin="0,0,16,0">
+                    <DataGrid x:Name="PdfGrid" ItemsSource="{Binding Items}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                              RowHeight="46" ColumnHeaderHeight="42" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E3E6EA"
+                              Background="White" BorderBrush="{StaticResource CardBorderBrush}" HeadersVisibility="Column" SelectionMode="Single" SelectionUnit="FullRow"
+                              EnableRowVirtualization="True" SelectionChanged="PdfGrid_SelectionChanged" AlternatingRowBackground="#FAFBFC"
+                              CellStyle="{StaticResource ReadableCellStyle}">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="対象" Width="50">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.Name="{Binding CurrentName}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="現在のファイル名" Width="1*" IsReadOnly="True" ElementStyle="{StaticResource CellText}" Binding="{Binding CurrentName}"/>
+                            <DataGridTextColumn Header="候補（ダブルクリックで編集）" Width="1.3*" ElementStyle="{StaticResource CellText}" Binding="{Binding SuggestedName, UpdateSourceTrigger=PropertyChanged}"/>
+                            <DataGridTextColumn Header="確信度" Width="72" IsReadOnly="True" ElementStyle="{StaticResource ConfidenceCellText}" Binding="{Binding ConfidenceDisplay}"/>
+                            <DataGridTemplateColumn Header="状態" Width="140" IsReadOnly="True" SortMemberPath="Status">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ToneChipStyle}" Tag="{Binding StatusTone}" ToolTip="{Binding Status}">
+                                            <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <StackPanel x:Name="EmptyListPanel" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False" Margin="0,40,0,0">
+                        <TextBlock Text="&#x1F4C4;" FontSize="34" HorizontalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                        <TextBlock x:Name="EmptyListText" Text="PDFがここに表示されます。&#x0a;PDFファイルまたはフォルダを選択するか、この画面へドラッグ＆ドロップしてください。" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="0,8,0,0" Foreground="{StaticResource MutedBrush}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Detail pane -->
+                <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource SubtleBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="6">
+                    <Grid>
+                        <TextBlock Text="一覧の行を選ぶと、候補・確信度・判断根拠をここに表示します。" Margin="16" VerticalAlignment="Top">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource MutedTextStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedItem, ElementName=PdfGrid}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,14">
+                            <ScrollViewer.Style>
+                                <Style TargetType="ScrollViewer">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedItem, ElementName=PdfGrid}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ScrollViewer.Style>
+                            <StackPanel>
+                                <TextBlock Text="候補の詳細" FontSize="16" FontWeight="Bold"/>
+                                <TextBlock Text="元のファイル名" Style="{StaticResource DetailLabel}"/>
+                                <TextBlock Text="{Binding SelectedItem.CurrentName, ElementName=PdfGrid}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                <Border Style="{StaticResource ToneChipStyle}" Tag="{Binding SelectedItem.StatusTone, ElementName=PdfGrid}" Margin="0,8,0,0">
+                                    <TextBlock Text="{Binding SelectedItem.Status, ElementName=PdfGrid}"/>
+                                </Border>
+                                <TextBlock Text="変更後のファイル名" Style="{StaticResource DetailLabel}"/>
+                                <TextBox x:Name="CandidateTextBox" Text="{Binding SelectedItem.SuggestedName, ElementName=PdfGrid, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="変更後のファイル名" TextWrapping="Wrap" MinHeight="64" VerticalContentAlignment="Top" Background="White"/>
+                                <TextBlock Text="AIの確信度（正しさの保証ではありません）" Style="{StaticResource DetailLabel}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding SelectedItem.ConfidenceDisplay, ElementName=PdfGrid}" FontWeight="Bold" FontSize="18" MinWidth="56" VerticalAlignment="Center"/>
+                                    <ProgressBar Grid.Column="1" Height="8" Minimum="0" Maximum="100" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                 Value="{Binding SelectedItem.ConfidencePercent, ElementName=PdfGrid, Mode=OneWay}" Background="#E3E6EA" BorderThickness="0">
+                                        <ProgressBar.Style>
+                                            <Style TargetType="ProgressBar">
+                                                <Setter Property="Foreground" Value="#176B50"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedItem.IsLowConfidence, ElementName=PdfGrid}" Value="True">
+                                                        <Setter Property="Foreground" Value="#C98A00"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ProgressBar.Style>
+                                    </ProgressBar>
+                                </Grid>
+                                <Border Background="#FFF4D6" BorderBrush="#EDC461" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,8,0,0"
+                                        Visibility="{Binding SelectedItem.IsLowConfidence, ElementName=PdfGrid, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="確信度が70%未満です。元のPDFを開いて名前を確認してください。" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource WarningTextBrush}"/>
+                                </Border>
+                                <TextBlock Text="判断根拠" Style="{StaticResource DetailLabel}"/>
+                                <TextBlock Text="{Binding SelectedItem.Reason, ElementName=PdfGrid}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                                <Button x:Name="OpenPdfButton" Content="元のPDFを開く" Click="OpenPdfButton_Click" IsEnabled="False" HorizontalAlignment="Stretch"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="4" Style="{StaticResource CardStyle}" Margin="24,12,24,16" Padding="20,12">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border Style="{StaticResource StepNumberStyle}"><TextBlock Text="4" Style="{StaticResource StepNumberTextStyle}"/></Border>
+                <StackPanel Grid.Column="1" Margin="0,0,20,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="OperationStatusText" Text="PDFファイルまたはフォルダを選択してください" TextWrapping="Wrap"/>
+                    <ProgressBar x:Name="OperationProgress" Margin="0,8,0,0" Height="6" Minimum="0" Maximum="1" Foreground="{StaticResource AccentBrush}" Background="#E3E6EA" BorderThickness="0"/>
+                </StackPanel>
+                <Button x:Name="RenameButton" Grid.Column="2" Content="変更内容を確認" Style="{StaticResource PrimaryButton}" IsEnabled="False" Click="RenameButton_Click" MinWidth="220"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

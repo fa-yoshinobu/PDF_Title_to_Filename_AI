@@ -1,0 +1,22 @@
+# .NET build outputs
+bin/
+obj/
+publish/
+artifacts/
+
+# Python test and release-tool caches
+__pycache__/
+*.py[cod]
+
+# Local distribution archives (published through GitHub Releases)
+*.zip
+
+# IDE and user-specific files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS files
+Thumbs.db
+.DS_Store
