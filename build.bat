@@ -13,27 +13,20 @@ if errorlevel 1 (
 
 set "PROJECT=src\PdfTitleRenamer\PdfTitleRenamer.csproj"
 set "CONFIGURATION=Release"
-set "PUBLISH_DIR=artifacts\publish"
+set "PUBLISH_DIR=artifacts\release"
 set "EXE=%PUBLISH_DIR%\PdfTitleRenamer_AI.exe"
-set "ZIP=artifacts\packages\PdfTitleRenamer_AI-win-x64.zip"
-set "LEGACY_ZIP=PdfTitleRenamer-win-x64.zip"
+set "ZIP=artifacts\release\PdfTitleRenamer_AI-win-x64.zip"
 set "RESULT=0"
 
 for %%I in ("%PUBLISH_DIR%") do set "PUBLISH_PATH=%%~fI"
 for %%I in ("%ZIP%") do set "ZIP_PATH=%%~fI"
-for %%I in ("%LEGACY_ZIP%") do set "LEGACY_ZIP_PATH=%%~fI"
-if /I not "%PUBLISH_PATH%"=="%CD%\artifacts\publish" (
+if /I not "%PUBLISH_PATH%"=="%CD%\artifacts\release" (
     echo [ERROR] 発行先がプロジェクト外です: %PUBLISH_PATH%
     set "RESULT=1"
     goto :finish
 )
-if /I not "%ZIP_PATH%"=="%CD%\artifacts\packages\PdfTitleRenamer_AI-win-x64.zip" (
+if /I not "%ZIP_PATH%"=="%CD%\artifacts\release\PdfTitleRenamer_AI-win-x64.zip" (
     echo [ERROR] ZIP出力先がプロジェクト外です: %ZIP_PATH%
-    set "RESULT=1"
-    goto :finish
-)
-if /I not "%LEGACY_ZIP_PATH%"=="%CD%\PdfTitleRenamer-win-x64.zip" (
-    echo [ERROR] 旧ZIPの場所がプロジェクト外です: %LEGACY_ZIP_PATH%
     set "RESULT=1"
     goto :finish
 )
@@ -62,9 +55,6 @@ dotnet build "%PROJECT%" -c "%CONFIGURATION%" --no-restore
 if errorlevel 1 goto :failed
 
 echo [3/4] 自己完結型の単一EXEを発行しています...
-if exist "%PUBLISH_PATH%" rmdir /s /q "%PUBLISH_PATH%"
-if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
-if exist "%LEGACY_ZIP_PATH%" del /q "%LEGACY_ZIP_PATH%"
 dotnet publish "%PROJECT%" -c "%CONFIGURATION%" -o "%PUBLISH_DIR%" --no-restore
 if errorlevel 1 goto :failed
 
@@ -74,13 +64,7 @@ if not exist "%EXE%" (
     goto :finish
 )
 
-powershell.exe -NoProfile -Command "$files = @(Get-ChildItem -LiteralPath '.\%PUBLISH_DIR%' -File -Recurse); if ($files.Count -ne 1 -or $files[0].Name -ne 'PdfTitleRenamer_AI.exe') { Write-Error '配布フォルダーにはEXE 1個だけが必要です。'; exit 1 }"
-if errorlevel 1 goto :failed
-
-echo [4/4] ZIPファイルを作成しています...
-if not exist "artifacts\packages" mkdir "artifacts\packages"
-if errorlevel 1 goto :failed
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '.\%PUBLISH_DIR%\*' -DestinationPath '.\%ZIP%' -CompressionLevel Optimal -Force"
+powershell.exe -NoProfile -File "%~dp0.github\scripts\package_release.ps1" -OutputDirectory "%PUBLISH_DIR%"
 if errorlevel 1 goto :failed
 
 echo.

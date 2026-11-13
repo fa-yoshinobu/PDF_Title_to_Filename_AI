@@ -121,7 +121,7 @@ codex login status
 build.bat
 ```
 
-コマンドラインや自動処理から一時停止なしで実行する場合は、`build.bat --no-pause`を使用します。成果物は`artifacts\publish\PdfTitleRenamer_AI.exe`と`artifacts\packages\PdfTitleRenamer_AI-win-x64.zip`です。
+コマンドラインや自動処理から一時停止なしで実行する場合は、`build.bat --no-pause`を使用します。成果物は`artifacts\release\PdfTitleRenamer_AI.exe`と`artifacts\release\PdfTitleRenamer_AI-win-x64.zip`です。
 
 生成物はすべて`artifacts`配下にまとめます。`build`はビルド結果、`intermediate`は中間ファイル、`publish`は配布用EXE 1個、`packages`はEXE 1個だけを収めた配布用ZIPです。`build`と`intermediate`はプロジェクト名ごとに分かれます。このフォルダとPythonのキャッシュはGitの管理対象に含めません。
 
@@ -130,7 +130,7 @@ dotnet build .\src\PdfTitleRenamer\PdfTitleRenamer.csproj -c Release
 dotnet run --project .\tests\behavior\BehaviorChecks.csproj -c Release
 python -B -m unittest discover -s tests/release -v
 dotnet format .\src\PdfTitleRenamer\PdfTitleRenamer.csproj --verify-no-changes --no-restore
-dotnet publish .\src\PdfTitleRenamer\PdfTitleRenamer.csproj -c Release -o .\artifacts\publish
+dotnet publish .\src\PdfTitleRenamer\PdfTitleRenamer.csproj -c Release -o .\artifacts\release
 ```
 
 アプリアイコン、単一EXE配布、高DPI設定は非AI版と共通の製品ファミリー構成です。
@@ -158,3 +158,5 @@ Windows 10 version 2004 or later, or Windows 11 (x64). The .NET runtime and PDFi
 Release notes and VirusTotal scan messages are in English. Existing project documents may keep their current language.
 
 Maintainers: update the English Changes section in `.github/release-notes.md` from the relevant CHANGELOG entries before releasing. The release workflow publishes the ZIP and checksum, then scans the actual published executables. Use the `Scan release with VirusTotal` workflow with a release tag to retry an incomplete scan. See the [shared release standard](https://github.com/fa-yoshinobu/release_standard).
+
+ローカル配布物は `build.bat` で作成します。起動EXEは `artifacts/release/PdfTitleRenamer_AI.exe`、配布ZIPは `artifacts/release/PdfTitleRenamer_AI-win-x64.zip`、SHA-256は同ZIPの `.sha256` です。ZIPを展開し、EXEを直接起動してください。旧出力フォルダーは自動削除しません。
