@@ -33,8 +33,8 @@
     <EmbeddedResource Include="..\..\ThirdPartyLicenses\**\*" LogicalName="PdfTitleRenamer.ThirdPartyLicenses/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
-    <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.14" />
-    <FrameworkReference Update="Microsoft.WindowsDesktop.App.WPF" RuntimeFrameworkVersion="10.0.14" />
+    <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.15" />
+    <FrameworkReference Update="Microsoft.WindowsDesktop.App.WPF" RuntimeFrameworkVersion="10.0.15" />
     <PackageReference Include="PDFtoImage" Version="5.4.0" />
     <!-- Pin the native Windows renderer as well as its managed wrapper. -->
     <PackageReference Include="SkiaSharp" Version="4.155.0" />

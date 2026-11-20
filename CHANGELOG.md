@@ -6,6 +6,10 @@ All notable changes are recorded from this point onward.
 
 ## [Unreleased]
 
+### Security
+
+- Updated the bundled .NET runtime to 10.0.15.
+
 ### Changed
 
 - Align local and CI executable, fixed-name ZIP and UTF-8/LF SHA-256 output under `artifacts/release/`; preserve required distribution files and require the VirusTotal API SHA-256 to match.
